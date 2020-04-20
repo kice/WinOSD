@@ -1,0 +1,13 @@
+[submodule "3rdparty/zlib"]
+	path = 3rdparty/zlib
+	url = https://github.com/madler/zlib.git
+[submodule "3rdparty/cpp-httplib"]
+	path = 3rdparty/cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "3rdparty/json"]
+	path = 3rdparty/json
+	url = https://github.com/nlohmann/json.git
+	tag = v3.7.3
+[submodule "3rdparty/stb"]
+	path = 3rdparty/stb
+	url = https://github.com/nothings/stb.git
