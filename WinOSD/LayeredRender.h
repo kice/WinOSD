@@ -11,7 +11,6 @@
 
 #include <wrl/client.h>
 
-#include <chrono>
 #include <deque>
 #include <mutex>
 
@@ -23,7 +22,11 @@ class LayeredRender : public WindowRender
 public:
     LayeredRender(int width, int height, const std::wstring &name);
 
-    int AddToast(const std::wstring &title, const std::wstring &text, const Image &im = Image());
+    int AddToast(
+        const std::wstring &title, 
+        const std::wstring &text, 
+        const Image &im = Image(), 
+        const std::wstring &link = L"");
 
     void OnInit()    override;
     void OnDestroy() override;
@@ -39,35 +42,18 @@ public:
         return boxMaxWidth - marginLeft - marginRight;
     }
 
+    void SetTopMost(float sec);
+
 private:
-    struct RenderCommand
-    {
-        enum RenderType
-        {
-            Text,
-            TextNewline,
-            Bitmap,
-        };
-
-        RenderCommand() = default;
-        RenderCommand(RenderType rt) : renderType(rt) {};
-
-        RenderType renderType;
-
-        float width = 0.f, height = 0.f;
-
-        Microsoft::WRL::ComPtr<IDWriteTextLayout> textLayout = nullptr;
-        Image *im = nullptr;
-    };
-
     struct Toast
     {
         UINT32 width, height;
-        std::chrono::steady_clock::time_point addedTime;
+        double addedTime;
         Microsoft::WRL::ComPtr<ID2D1Bitmap>  normal;
         Microsoft::WRL::ComPtr<ID2D1Bitmap>  highlight;
 
         int id;
+        std::wstring link;
     };
 
     void CreateDeviceIndependentResources();
@@ -126,8 +112,8 @@ private:
     const float marginBottom = 15.f;
     const float marginLeft = 15.f;
 
-    const float titleFontSize = 26.f;
-    const float textFontSize = 22.f;
+    const float titleFontSize = 24.f;
+    const float textFontSize = 20.f;
     const float timeFontSize = 10.f;
 
     const std::wstring titleFontName = L"Î¢ÈíÑÅºÚ";
@@ -157,9 +143,32 @@ private:
     std::deque<Toast> toastList;
     std::atomic<bool> invalidated;
 
+    StopWatch timer;
+    std::atomic<double> topmostTime;
+
     int mouseHover = -1;
 
     HWND hWorkerW;
+
+    struct RenderCommand
+    {
+        enum RenderType
+        {
+            Text,
+            TextNewline,
+            Bitmap,
+        };
+
+        RenderCommand() = default;
+        RenderCommand(RenderType rt) : renderType(rt) {};
+
+        RenderType renderType;
+
+        float width = 0.f, height = 0.f;
+
+        Microsoft::WRL::ComPtr<IDWriteTextLayout> textLayout = nullptr;
+        Image *im = nullptr;
+    };
 
     // unused method
     auto MeasureText(const std::wstring &text) const;

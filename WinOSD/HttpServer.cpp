@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "ActionCenter.h"
+#include "Win32Application.h"
 
 #pragma comment(lib, "Winhttp.lib")
 
@@ -160,8 +161,8 @@ static void HttpMain()
     auto &r = *server;
 
     r.Get("/toast", [](const Request &req, Response &res) {
-        if (!req.has_param("title") && !req.has_param("text")) {
-            res.set_content(R"({"status": "error", "msg": "invalid parameters"})", "application/json");
+        if (!req.has_param("title") && !req.has_param("text") && !req.has_param("imageurl")) {
+            res.set_content(R"({"status": "error", "msg": "empty toast"})", "application/json");
             return;
         }
 
@@ -173,6 +174,8 @@ static void HttpMain()
             toast.image = DownloadImage(std::u8tow(req.get_param_value("imageurl")));
         }
 
+        toast.link = std::u8tow(req.get_param_value("link"));
+
         int toastId = actionCenter.AddToast(std::move(toast));
         if (toastId == -1) {
             res.set_content(R"({"status": "error", "msg": "unable to add toast"})", "application/json");
@@ -182,9 +185,9 @@ static void HttpMain()
         char json[256];
         sprintf(json, R"({"status": "ok", "id": "%d"})", toastId);
         res.set_content(json, "application/json");
-          });
+    });
 
-    r.Post("/toast", [&](const Request &req, Response &res, const ContentReader &content_reader) {
+    r.Post("/toast", [](const Request &req, Response &res, const ContentReader &content_reader) {
         std::string body;
         if (req.is_multipart_form_data()) {
             MultipartFormDataItems files;
@@ -207,16 +210,32 @@ static void HttpMain()
 
         auto data = json::parse(body);
 
-        auto title = std::encoding(data["title"].get<std::string>(), CP_THREAD_ACP, CP_UTF8);
-        auto text = std::encoding(data["text"].get<std::string>(), CP_THREAD_ACP, CP_UTF8);
-        auto encoded = data["image"].get<std::string>();
+        std::string title;
+        if (data.find("title") != data.end()) {
+            title = data["title"].get<std::string>();
+        }
 
-        Toast toast = Toast{
-            0,
-            std::u8tow(title),
-            std::u8tow(text),
-        };
+        std::string text;
+        if (data.find("text") != data.end()) {
+            text = data["text"].get<std::string>();
+        }
 
+        std::string encoded;
+        if (data.find("image") != data.end()) {
+            encoded = data["image"].get<std::string>();
+        }
+
+        if (title.empty() && text.empty() && encoded.empty()) {
+            res.set_content(R"({"status": "error", "msg": "empty toast"})", "application/json");
+            return;
+        }
+
+        std::string link = data["link"].get<std::string>();
+        if (data.find("link") != data.end()) {
+            link = data["link"].get<std::string>();
+        }
+
+        Image im;
         if (encoded.size()) {
             uint8_t *image = (uint8_t *)_aligned_malloc(base64::decoded_size(encoded.length()), 512);
             if (image == nullptr) {
@@ -231,16 +250,23 @@ static void HttpMain()
                 return;
             }
 
-            toast.image = Image::open(image, written);
+            im = Image::open(image, written);
             _aligned_free(image);
 
-            if (toast.image) {
+            if (im) {
                 res.set_content(R"({"status": "error", "msg": "unable to decode image"})", "application/json");
                 return;
             }
         }
 
-        int toastId = actionCenter.AddToast(std::move(toast));
+        int toastId = actionCenter.AddToast(Toast{
+            0,
+            std::u8tow(title),
+            std::u8tow(text),
+            std::move(im),
+            std::u8tow(link),
+        });
+
         if (toastId == -1) {
             res.set_content(R"({"status": "error", "msg": "unable to add toast"})", "application/json");
             return;
@@ -249,7 +275,13 @@ static void HttpMain()
         char json[256];
         sprintf(json, R"({"status": "ok", "id": "%d"})", toastId);
         res.set_content(json, "application/json");
-           });
+    });
+
+    r.Get("/stop", [](const Request &req, Response &res) {
+        DBG << "Stop by HTTP request...";
+        PostMessage(Win32Application::GetHwnd(), WM_DESTROY, 0, 0);
+        res.set_content(R"({"status": "ok"})", "application/json");
+    });
 
     r.listen("localhost", 8520);
 }
@@ -261,7 +293,7 @@ void StartHttpServer()
     httpWorker = std::thread([]() {
         server = new httplib::Server();
         HttpMain();
-                             });
+    });
 }
 
 void StopHttpServer()

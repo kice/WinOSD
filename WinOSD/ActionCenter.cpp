@@ -23,7 +23,12 @@ int ActionCenter::AddToast(Toast &&toast)
         toast.image = toast.image.resize(w, h);
     }
 
-    return pRender->AddToast(toast.title, toast.text, toast.image);
+    auto toastId = pRender->AddToast(toast.title, toast.text, toast.image, toast.link);
+    if (toastId > 0) {
+        pRender->SetTopMost(3.f);
+    }
+
+    return toastId;
 }
 
 ActionCenter::~ActionCenter()

@@ -11,6 +11,7 @@ struct Toast
     std::wstring title;
     std::wstring text;
     Image image;
+    std::wstring link;
 };
 
 class LayeredRender;

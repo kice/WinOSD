@@ -27,7 +27,7 @@ inline std::wstring NowString()
     return buf;
 }
 
-int LayeredRender::AddToast(const std::wstring &title, const std::wstring &text, const Image &im)
+int LayeredRender::AddToast(const std::wstring &title, const std::wstring &text, const Image &im, const std::wstring &link)
 {
     TIMEIT_START(AddToast);
 
@@ -253,11 +253,11 @@ int LayeredRender::AddToast(const std::wstring &title, const std::wstring &text,
         toastList.emplace_front(
             Toast{
                 (UINT32)boxMaxWidth, (UINT32)boxHeight,
-                std::chrono::steady_clock::now(),
-                normalBmp, highlightBmp, toastId
+                timer.ms(),
+                normalBmp, highlightBmp, toastId, link
             });
         invalidated = true;
-                                      }));
+    }));
 
     DBG << "Toast added";
 
@@ -267,7 +267,9 @@ int LayeredRender::AddToast(const std::wstring &title, const std::wstring &text,
 
 LayeredRender::LayeredRender(int width, int height, const std::wstring &name) :
     WindowRender(width, height, name), _ready(false)
-{}
+{
+    timer.start();
+}
 
 HRESULT LayeredRender::CreateTextFormat(
     const std::wstring &fontFamily, float fontSize,
@@ -734,7 +736,7 @@ void LayeredRender::OnMouse(MouseEvent event, int xPos, int yPos, bool shifted, 
 
     float x = posX, y = posY;
     for (auto it = toastList.begin(); it != toastList.end(); ++it) {
-        const auto toast = *it;
+        const auto &toast = *it;
         if (!(x <= xPos && xPos <= x + toast.width &&
               y <= yPos && yPos <= y + toast.height)) {
             y += toast.height + marginBottom;
@@ -745,7 +747,10 @@ void LayeredRender::OnMouse(MouseEvent event, int xPos, int yPos, bool shifted, 
             // close the message
             toastList.erase(it);
         } else if (ctrled) {
-            // TODO: open the message
+            std::thread([&] {
+                ShellExecute(NULL, nullptr, toast.link.c_str(),
+                             nullptr, nullptr, SW_SHOWNORMAL);
+            }).detach();
         }
 
         invalidated = true;
@@ -759,6 +764,17 @@ void LayeredRender::OnTimer(int id)
 {
     // refresh window render
     PostMessage(Win32Application::GetHwnd(), WM_PAINT, 0, 0);
+
+    int style = GetWindowLong(Win32Application::GetHwnd(), GWL_EXSTYLE);
+    if (style & WS_EX_TOPMOST && topmostTime < timer.ms()) {
+        SetWindowPos(Win32Application::GetHwnd(), HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    }
+}
+
+void LayeredRender::SetTopMost(float sec)
+{
+    topmostTime = timer.ms() + sec * 1000;
+    SetWindowPos(Win32Application::GetHwnd(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
 auto LayeredRender::MeasureText(const std::wstring &text) const

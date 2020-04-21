@@ -167,7 +167,7 @@ public:
                 // sleep time is (callback() + interval) ms
                 std::this_thread::sleep_for(1ms * interval);
             }
-                            });
+        });
     }
 
     void disable(bool wait_pause = false)
